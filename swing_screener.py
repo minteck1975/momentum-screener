@@ -42,12 +42,19 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import json
+import logging
 import warnings
 import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 warnings.filterwarnings("ignore")
+
+# Silence yfinance's per-ticker error logging (404s on delisted/renamed tickers).
+# yfinance uses a Python logger named 'yfinance' — raising its level to CRITICAL
+# suppresses the noise without breaking stdout for our progress lines.
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+logging.getLogger("yfinance").propagate = False
 
 
 # =============================================================================
@@ -70,21 +77,12 @@ def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
 # =============================================================================
 
 def fetch(ticker: str, period: str = "1y", interval: str = "1d") -> pd.DataFrame:
-    """Fetch OHLCV, suppressing yfinance's noisy stdout/stderr on bad tickers."""
-    import os
-    import sys
-    import contextlib
-
-    # yfinance prints "HTTP Error 404" and "Failed download" directly to stdout/stderr,
-    # bypassing the standard logging system. Redirect both during the call.
+    """Fetch OHLCV. yfinance's noise is silenced globally via logging config at import time."""
     try:
-        with open(os.devnull, "w") as devnull, \
-             contextlib.redirect_stdout(devnull), \
-             contextlib.redirect_stderr(devnull):
-            df = yf.download(
-                ticker, period=period, interval=interval,
-                progress=False, auto_adjust=True, threads=False,
-            )
+        df = yf.download(
+            ticker, period=period, interval=interval,
+            progress=False, auto_adjust=True, threads=False,
+        )
         if df is None or df.empty:
             return pd.DataFrame()
         if isinstance(df.columns, pd.MultiIndex):
@@ -617,7 +615,9 @@ def get_sp500_universe(use_wikipedia: bool = True, verbose: bool = True) -> list
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 html = resp.read().decode("utf-8")
-            tables = pd.read_html(html)
+            # Newer pandas requires a file-like; passing a raw string is treated as a path.
+            from io import StringIO
+            tables = pd.read_html(StringIO(html))
             df = tables[0]  # first table on the page is the constituent list
             tickers = df["Symbol"].astype(str).tolist()
             # Normalize Berkshire/BF dot tickers for yfinance

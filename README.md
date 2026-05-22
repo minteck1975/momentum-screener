@@ -53,7 +53,7 @@ Per the source material: ideally enter in the last hour of the trading day once 
 ## Run it
 
 ```bash
-pip install yfinance pandas numpy lxml
+pip install -r requirements.txt
 
 # Scan the full S&P 500 (~5-7 min)
 python swing_screener.py

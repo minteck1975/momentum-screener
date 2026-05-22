@@ -23,6 +23,10 @@ concurrency:
 permissions:
   contents: write
 
+# Opt into Node.js 24 ahead of June 2026 default switch (silences deprecation warning)
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   scan:
     runs-on: ubuntu-latest

@@ -821,32 +821,21 @@
 
       const cfg = {
         autosize: true,
-        symbol: ticker,                    // TV auto-resolves the exchange prefix
-        interval: "D",                      // daily candles
+        symbol: ticker,
+        interval: "D",
         timezone: "America/New_York",
         theme: "dark",
-        style: "1",                          // candlesticks
+        style: "1",
         locale: "en",
         backgroundColor: "rgba(17, 22, 30, 1)",
         gridColor: "rgba(42, 52, 69, 0.6)",
-        hide_side_toolbar: true,
+        hide_side_toolbar: false,
         allow_symbol_change: false,
         save_image: false,
         studies: [
-          // 20-period EMA on close
-          { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-          // 50-period EMA on close
-          { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }
+          "MAExp@tv-basicstudies",
+          "MAExp@tv-basicstudies"
         ],
-        // Make both EMAs thicker. The free embed widget can't give two
-        // instances of the same study different colors — that requires the
-        // paid Charting Library. So both render in TradingView's default EMA
-        // color (yellow), and we tell them apart by which line is steeper
-        // (the 20-EMA reacts faster to price than the 50-EMA).
-        studies_overrides: {
-          "moving average exponential.plot.linewidth": 2,
-          "moving average exponential.plot.color": "#F5B942"
-        },
         support_host: "https://www.tradingview.com"
       };
 
@@ -879,11 +868,10 @@
             <div class="chart-panel">
               <div class="chart-header">
                 <span class="chart-title">
-                  ${r.ticker} · Daily ·
-                  <span style="color:#F5B942">━━</span> 20-EMA &amp; 50-EMA
-                  <span style="color:var(--text-3); font-size:10px; margin-left:6px">(20 reacts faster · 50 is smoother)</span>
+                  ${r.ticker} · Daily · with EMA overlay
+                  <span style="color:var(--text-3); font-size:10px; margin-left:8px">(for custom EMA20/50 → open in TradingView)</span>
                 </span>
-                <a class="chart-tv-link" href="https://www.tradingview.com/chart/?symbol=${tvSymbol}" target="_blank" rel="noopener">open in TradingView ↗</a>
+                <a class="chart-tv-link" href="https://www.tradingview.com/chart/?symbol=${tvSymbol}&studies=%5B%7B%22id%22%3A%22MAExp%40tv-basicstudies%22%2C%22inputs%22%3A%7B%22length%22%3A20%7D%7D%2C%7B%22id%22%3A%22MAExp%40tv-basicstudies%22%2C%22inputs%22%3A%7B%22length%22%3A50%7D%7D%5D" target="_blank" rel="noopener">open in TradingView ↗</a>
               </div>
               <div class="tradingview-widget-container" id="${chartId}">
                 <div class="tradingview-widget-container__widget"></div>

@@ -564,7 +564,7 @@
 <div class="strip">
   <div class="stat"><div class="label">A Setups</div><div class="v green" id="stat-a">—</div></div>
   <div class="stat"><div class="label">Strong Leaders</div><div class="v green" id="stat-leaders">—</div></div>
-  <div class="stat"><div class="label">Top Sector</div><div class="v blue" id="stat-sector" style="font-size:18px;">—</div></div>
+  <div class="stat"><div class="label">Top Stock</div><div class="v blue" id="stat-sector" style="font-size:18px;">—</div></div>
   <div class="stat"><div class="label">Trigger Today</div><div class="v blue" id="stat-trigger">—</div></div>
   <div class="stat"><div class="label">At 8-EMA</div><div class="v purple" id="stat-at-ema">—</div></div>
   <div class="stat"><div class="label">Avg Score</div><div class="v" id="stat-avg">—</div></div>
@@ -833,11 +833,29 @@
         allow_symbol_change: false,
         save_image: false,
         studies: [
-          // 20-period EMA on close — matches our screener's 20-EMA
-          { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-          // 50-period EMA on close — matches our screener's 50-EMA
-          { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }
+          {
+            // 20-period EMA on close — fast (yellow/amber)
+            id: "MAExp@tv-basicstudies",
+            inputs: { length: 20 },
+            styles: {
+              plot: { color: "#F5B942", linewidth: 2 }
+            }
+          },
+          {
+            // 50-period EMA on close — slow (blue)
+            id: "MAExp@tv-basicstudies",
+            inputs: { length: 50 },
+            styles: {
+              plot: { color: "#5B9DF9", linewidth: 2 }
+            }
+          }
         ],
+        // Fallback: in case per-study styles aren't honored by the free widget,
+        // these top-level overrides at least make both EMAs thicker and clearly visible.
+        studies_overrides: {
+          "moving average exponential.plot.linewidth": 2,
+          "moving average exponential.plot.color": "#F5B942"
+        },
         support_host: "https://www.tradingview.com"
       };
 
@@ -869,7 +887,11 @@
 
             <div class="chart-panel">
               <div class="chart-header">
-                <span class="chart-title">${r.ticker} · Daily · 20-EMA + 50-EMA</span>
+                <span class="chart-title">
+                  ${r.ticker} · Daily ·
+                  <span style="color:#F5B942">●</span> 20-EMA
+                  <span style="color:#5B9DF9; margin-left:8px">●</span> 50-EMA
+                </span>
                 <a class="chart-tv-link" href="https://www.tradingview.com/chart/?symbol=${tvSymbol}" target="_blank" rel="noopener">open in TradingView ↗</a>
               </div>
               <div class="tradingview-widget-container" id="${chartId}">
@@ -934,15 +956,13 @@
     );
     document.getElementById('stat-leaders').textContent = strongLeaders.length;
 
-    // Top Sector: which sector has the most A_SETUPs today.
-    // O'Neil's CAN SLIM principle — leading stocks come from leading industries.
-    const sectorCounts = {};
-    aSetups.forEach(x => {
-      if (x.sector) sectorCounts[x.sector] = (sectorCounts[x.sector] || 0) + 1;
-    });
-    const sectorEntries = Object.entries(sectorCounts).sort((a, b) => b[1] - a[1]);
+    // Top Stock: highest-scoring A_SETUP today. Visual anchor for "where do I
+    // start looking?" — the single best-confidence candidate in the table.
+    const topStock = aSetups.length
+      ? aSetups.reduce((best, x) => (x.score > best.score ? x : best), aSetups[0])
+      : null;
     document.getElementById('stat-sector').textContent =
-      sectorEntries.length ? `${sectorEntries[0][0]} · ${sectorEntries[0][1]}` : '—';
+      topStock ? `${topStock.ticker} · ${topStock.score}` : '—';
 
     document.getElementById('stat-trigger').textContent = aSetups.filter(x => x.signal_found && x.signal_bars_ago === 0).length;
     document.getElementById('stat-at-ema').textContent = aSetups.filter(x => x.dist_to_ema8_atr !== null && x.dist_to_ema8_atr !== undefined && Math.abs(x.dist_to_ema8_atr) <= 0.5).length;

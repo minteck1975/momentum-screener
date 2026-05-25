@@ -560,8 +560,6 @@
 
 <div class="strip">
   <div class="stat"><div class="label">A Setups</div><div class="v green" id="stat-a">—</div></div>
-  <div class="stat"><div class="label">B Setups</div><div class="v green" id="stat-b">—</div></div>
-  <div class="stat"><div class="label">Watch</div><div class="v amber" id="stat-watch">—</div></div>
   <div class="stat"><div class="label">Trigger Today</div><div class="v blue" id="stat-trigger">—</div></div>
   <div class="stat"><div class="label">At 8-EMA</div><div class="v purple" id="stat-at-ema">—</div></div>
   <div class="stat"><div class="label">Avg Score</div><div class="v" id="stat-avg">—</div></div>
@@ -921,13 +919,11 @@
 
   function renderStats(data) {
     const r = allResults;
-    const count = t => r.filter(x => x.tier === t).length;
-    document.getElementById('stat-a').textContent = count('A_SETUP');
-    document.getElementById('stat-b').textContent = count('B_SETUP');
-    document.getElementById('stat-watch').textContent = count('WATCH');
-    document.getElementById('stat-trigger').textContent = r.filter(x => x.signal_found && x.signal_bars_ago === 0 && (x.tier === 'A_SETUP' || x.tier === 'B_SETUP')).length;
-    document.getElementById('stat-at-ema').textContent = r.filter(x => x.dist_to_ema8_atr !== null && x.dist_to_ema8_atr !== undefined && Math.abs(x.dist_to_ema8_atr) <= 0.5 && (x.tier === 'A_SETUP' || x.tier === 'B_SETUP')).length;
-    const validScores = r.filter(x => typeof x.score === 'number' && x.tier !== 'PASS' && x.tier !== 'ILLIQUID').map(x => x.score);
+    const aSetups = r.filter(x => x.tier === 'A_SETUP');
+    document.getElementById('stat-a').textContent = aSetups.length;
+    document.getElementById('stat-trigger').textContent = aSetups.filter(x => x.signal_found && x.signal_bars_ago === 0).length;
+    document.getElementById('stat-at-ema').textContent = aSetups.filter(x => x.dist_to_ema8_atr !== null && x.dist_to_ema8_atr !== undefined && Math.abs(x.dist_to_ema8_atr) <= 0.5).length;
+    const validScores = aSetups.map(x => x.score).filter(s => typeof s === 'number');
     const avg = validScores.length ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
     document.getElementById('stat-avg').textContent = avg;
 

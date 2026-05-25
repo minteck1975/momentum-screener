@@ -167,7 +167,19 @@ def detect_reversal_signal(df: pd.DataFrame) -> dict:
 
     patterns.sort(key=lambda p: (p[1], 0 if "engulfing" in p[0] else 1))
     name, bars_ago = patterns[0]
-    return {"found": True, "pattern": name, "bars_ago": bars_ago}
+
+    # Close-in-Range: where did the trigger bar close within its day's range?
+    # >= 0.7 means closed in upper 70% of range (strong close).
+    # Stockbee uses this in his Bullish Combo / LTB / Swing setups as a quality filter.
+    # A "valid" pattern that closes weakly in its range is much less reliable.
+    trigger_bar = df.iloc[-1] if bars_ago == 0 else df.iloc[-2]
+    rng = float(trigger_bar["High"]) - float(trigger_bar["Low"])
+    if rng > 0:
+        cir = (float(trigger_bar["Close"]) - float(trigger_bar["Low"])) / rng
+    else:
+        cir = 0.5  # zero-range bar = neutral
+
+    return {"found": True, "pattern": name, "bars_ago": bars_ago, "close_in_range": cir}
 
 
 # =============================================================================
@@ -519,6 +531,21 @@ def analyze_ticker(ticker: str, min_dollar_vol: float = 20_000_000,
             score += 6
             reasons.append("trigger bar closed above 8-EMA")
 
+        # Close-in-Range quality boost (from Stockbee combo logic).
+        # A pattern that closes strong in its range = supply absorbed, demand winning.
+        # A pattern that closes weak = demand failed even though shape looked valid.
+        cir = signal.get("close_in_range")
+        if cir is not None:
+            if cir >= 0.85:
+                score += 6
+                reasons.append(f"strong close-in-range ({cir:.0%})")
+            elif cir >= 0.7:
+                score += 3
+                reasons.append(f"strong close ({cir:.0%} of range)")
+            elif cir < 0.4:
+                score -= 5
+                reasons.append(f"⚠ weak close ({cir:.0%} of range) — pattern but no follow-through")
+
     # ---- Market leadership (up to 25 pts, can subtract for laggards) ----
     # Inspired by Minervini's Trend Template, O'Neil's RS, Qullamaggie's AS rankings.
     if leadership.get("valid"):
@@ -582,23 +609,7 @@ def analyze_ticker(ticker: str, min_dollar_vol: float = 20_000_000,
             score -= 2
             reasons.append(f"⚠ low ADR ({adr:.1f}%) — slow mover")
 
-    score = max(0, min(100, score))
-
-    # ---- Tier ----
-    has_trend = stacked
-    has_signal = signal["found"]
-    has_pullback = pullback.get("valid") and abs(pullback.get("dist_to_ema8_atr", 99)) <= 1.5
-
-    if score >= 75 and has_trend and has_signal and has_pullback:
-        tier = "A_SETUP"
-    elif score >= 60 and has_trend and has_pullback:
-        tier = "B_SETUP"
-    elif score >= 45 and has_trend:
-        tier = "WATCH"
-    else:
-        tier = "PASS"
-
-    # ---- Trade plan ----
+    # ---- Trade plan (computed early so ADR risk-distance check can run before tier) ----
     entry = last_close
     trigger_bar_offset = -1 - (signal["bars_ago"] if signal["found"] else 0)
     trigger_low = float(df["Low"].iloc[trigger_bar_offset])
@@ -611,6 +622,46 @@ def analyze_ticker(ticker: str, min_dollar_vol: float = 20_000_000,
     target2 = entry + 2 * risk_per_share
     rr1 = (target1 - entry) / risk_per_share if risk_per_share > 0 else 0
     rr2 = (target2 - entry) / risk_per_share if risk_per_share > 0 else 0
+
+    # ---- ADR risk-distance check (Qullamaggie V2 extension filter) ----
+    # Rejects setups where (entry - stop) is more than 1.2x the stock's daily
+    # dollar-ADR. The intuition: if you have to risk more than ~1.2 daily ranges
+    # to give the trade room, you're buying something already extended from its
+    # base. Real continuation setups are TIGHT — entry near support, stop just below.
+    # This is much sharper than "within 1 ATR of 8-EMA" because it ties risk
+    # directly to the stock's own volatility.
+    adr_pct = leadership.get("adr_pct_20d", 0) or 0
+    adr_dollar = (adr_pct / 100.0) * last_close if adr_pct > 0 else last_atr
+    risk_vs_adr = risk_per_share / adr_dollar if adr_dollar > 0 else 99
+    risk_extended = risk_vs_adr > 1.2
+
+    if risk_vs_adr <= 0.8:
+        score += 6
+        reasons.append(f"tight risk ({risk_vs_adr:.2f}x daily ADR)")
+    elif risk_vs_adr <= 1.2:
+        score += 2
+        reasons.append(f"acceptable risk ({risk_vs_adr:.2f}x daily ADR)")
+    else:
+        score -= 8
+        reasons.append(f"⚠ extended setup: risk = {risk_vs_adr:.2f}x daily ADR (need ≤ 1.2x)")
+
+    score = max(0, min(score, 100))
+
+    # ---- Tier ----
+    has_trend = stacked
+    has_signal = signal["found"]
+    has_pullback = pullback.get("valid") and abs(pullback.get("dist_to_ema8_atr", 99)) <= 1.5
+    # A_SETUP requires risk_vs_adr <= 1.2 (not extended). Even a 75+ score
+    # setup is demoted if the entry is too far from its base.
+
+    if score >= 75 and has_trend and has_signal and has_pullback and not risk_extended:
+        tier = "A_SETUP"
+    elif score >= 60 and has_trend and has_pullback:
+        tier = "B_SETUP"
+    elif score >= 45 and has_trend:
+        tier = "WATCH"
+    else:
+        tier = "PASS"
 
     return {
         "ticker": ticker,
@@ -644,6 +695,7 @@ def analyze_ticker(ticker: str, min_dollar_vol: float = 20_000_000,
         "signal_found": signal["found"],
         "signal_pattern": signal.get("pattern"),
         "signal_bars_ago": signal.get("bars_ago"),
+        "close_in_range": signal.get("close_in_range"),
         # Leadership (vs SPY)
         "rs_1m": leadership.get("rs_1m"),
         "rs_3m": leadership.get("rs_3m"),
@@ -659,6 +711,7 @@ def analyze_ticker(ticker: str, min_dollar_vol: float = 20_000_000,
         "entry": entry,
         "stop": stop,
         "risk_per_share": risk_per_share,
+        "risk_vs_adr": risk_vs_adr,
         "target1_swing_high": target1,
         "target2_2R": target2,
         "rr1": rr1,

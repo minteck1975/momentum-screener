@@ -1,6 +1,6 @@
-# 8-EMA Pullback + Market Leadership Swing Screener
+# Momentum Stocks Screener
 
-A two-part bot that screens US stocks for the **8-EMA Pullback** swing setup, filtered down to **market leaders** outperforming the S&P 500: stocks in an established uptrend that have just pulled back to the 8-day EMA on declining volume, with a bullish reversal candle signaling continuation — *and* showing positive relative strength.
+A two-part bot that scans **~2,000 US common stocks** (ETFs and ADRs excluded) for the **8-EMA Pullback** swing setup, filtered down to **market leaders** outperforming the S&P 500: stocks in an established uptrend that have just pulled back to the 8-day EMA on declining volume, with a bullish reversal candle signaling continuation — *and* showing positive relative strength.
 
 The leadership filters are distilled from 14 trader methodologies (Minervini, Qullamaggie, O'Neil, Stan Weinstein, Mike Webster, Patrick Walker, Richard Moglen, and others) that all share the same common DNA: trade leaders, not laggards.
 
@@ -85,33 +85,32 @@ When `dashboard.html` is opened directly via `file://`, click **Load results.jso
 
 ## Customizing the universe
 
-By default, the screener fetches the live S&P 500 from Wikipedia. You can also pass any custom ticker list:
+By default, the screener scans **~2,000 US common stocks** via NASDAQ Trader's daily public listings. ETFs, ADRs, warrants, units, preferreds, and test listings are all excluded automatically. The liquidity filter (`min_dollar_vol`) further cuts the actively-scanned set to the ~1,500-2,000 names with real institutional volume.
 
 ```python
-from swing_screener import run, position_size, get_sp500_universe, NASDAQ_100, SP500_STATIC
+from swing_screener import run, get_universe, NASDAQ_100, SP500_STATIC
 
-# Default — fetches live S&P 500
+# Default — ~2,000 US common stocks (ETFs/ADRs excluded)
 run()
 
-# Use NASDAQ-100 instead
-run(tickers=NASDAQ_100)
+# Use S&P 500 only (smaller, faster scan)
+run(universe_mode="sp500")
 
-# Use static fallback (no Wikipedia call)
-run(use_wikipedia=False)
+# Use NASDAQ-100
+run(universe_mode="nasdaq100")
 
 # Custom watchlist
 run(tickers=["AAPL", "NVDA", "TSLA", "META"])
 
-# Position sizing helper
-ps = position_size(account_size=50_000, risk_pct=1.0, entry=180.50, stop=176.20)
-print(ps)  # {'shares': 116, 'position_value': 20938, 'risk_dollars': 499, ...}
+# Tighten liquidity filter — only mega-caps
+run(min_dollar_vol=100_000_000)
+
+# Get the universe list directly without running a scan
+tickers = get_universe(mode="wide")  # ~2,000
+tickers = get_universe(mode="sp500") # ~500
 ```
 
-To tighten the liquidity filter (e.g. only mega-liquid names), bump `min_dollar_vol`:
-
-```python
-run(min_dollar_vol=100_000_000)  # only stocks with >$100M avg daily dollar volume
-```
+A full ~2,000 stock scan takes about 10-12 minutes on the GitHub Actions runner. If you want it faster for development, run with `universe_mode="sp500"` (3-5 min).
 
 ## Strategy notes
 

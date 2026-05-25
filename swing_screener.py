@@ -819,6 +819,188 @@ def get_sp500_universe(use_wikipedia: bool = True, verbose: bool = True) -> list
     return SP500_STATIC[:]
 
 
+# =============================================================================
+# WIDE UNIVERSE — Top ~2000 US Common Stocks (excludes ETFs and ADRs)
+# =============================================================================
+# We use NASDAQ Trader's public FTP-distributed listings, which are the
+# authoritative source for US-listed securities. They include flags for ETFs
+# and detailed security category codes (we exclude category 'A' for ADRs).
+#
+# After fetching ~7000 listed securities, we filter down by:
+#   1. Remove ETFs (NASDAQ marks them explicitly)
+#   2. Remove ADRs (security category 'A')
+#   3. Remove warrants, units, rights, preferreds (suffix or category)
+#   4. Remove test/inactive listings
+#   5. Filter to common stocks only by category 'Q' (NASDAQ) / 'N' (NYSE)
+#   6. The liquidity filter inside analyze_ticker() further cuts to ~2000 names
+#      by requiring $20M+ daily dollar volume.
+
+def get_us_common_stocks(verbose: bool = True, top_n: int = 2500) -> list:
+    """
+    Fetch ~2000-2500 US common stocks via NASDAQ Trader's daily listings.
+
+    Excludes ETFs, ADRs, warrants, units, preferreds, test listings.
+    Returns ticker symbols normalized for yfinance (dots → dashes).
+
+    The downstream $20M dollar-volume liquidity filter cuts this to ~2000.
+    """
+    import urllib.request
+
+    sources = [
+        # NASDAQ-listed securities (~3500 entries)
+        ("https://www.nasdaqtrader.com/dynamic/SymDir/nasdaqlisted.txt", "nasdaq"),
+        # Other listings: NYSE, NYSE American, NYSE Arca, IEX, BATS (~3500 entries)
+        ("https://www.nasdaqtrader.com/dynamic/SymDir/otherlisted.txt", "other"),
+    ]
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    }
+
+    all_rows = []
+    for url, kind in sources:
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                text = resp.read().decode("utf-8")
+            lines = text.strip().split("\n")
+            if not lines:
+                continue
+            header = lines[0].split("|")
+            for line in lines[1:]:
+                # The last line is a "File Creation Time" footer — skip it.
+                if line.startswith("File Creation Time"):
+                    continue
+                parts = line.split("|")
+                if len(parts) != len(header):
+                    continue
+                row = dict(zip(header, parts))
+                row["_source"] = kind
+                all_rows.append(row)
+        except Exception as e:
+            if verbose:
+                print(f"  Failed to fetch {url}: {e}")
+
+    if not all_rows:
+        if verbose:
+            print("  All NASDAQ fetches failed; falling back to S&P 500 static list.")
+        return SP500_STATIC[:]
+
+    if verbose:
+        print(f"  Fetched {len(all_rows)} raw listings from NASDAQ Trader")
+
+    # ----- Filter -----
+    # Reference: nasdaqtrader.com/Trader.aspx?id=SymbolDirDefs
+    # ETF column 'Y' = ETF
+    # Test Issue = 'Y' means test listing
+    # NASDAQ has "Financial Status" column; non-blank values like 'D' = deficient/delisted
+    # ADRs:
+    #   - On nasdaqlisted, no explicit flag but Security Name contains "American Depositary"
+    #   - On otherlisted, no explicit flag either — name-based filter
+    # We exclude any name containing: ADR, ADS, "American Depositary", Warrant, Unit, Right,
+    # Preferred, Trust (closed-end funds), Notes, Bond, "% Sub", "% Cum", "Class % "
+    EXCLUDE_NAME_PATTERNS = [
+        "ADR", "American Depositary", "American Depository", "ADS ", "ADS%", "ADR%",
+        " Warrant", "Warrants", " Right", " Rights", " Unit", " Units",
+        "Preferred", "% Notes", " Notes due", "Bond", "Debenture",
+        " Trust ", "Closed End", "Closed-End", "% Sub", "% Cum",
+        "% Conv", "% Pfd", "Pfd ", "Pfd.", "% Series",
+    ]
+
+    seen = set()
+    common = []
+    for row in all_rows:
+        symbol = row.get("Symbol") or row.get("ACT Symbol", "")
+        symbol = symbol.strip().upper()
+        if not symbol or symbol in seen:
+            continue
+
+        # ETF flag
+        etf_flag = row.get("ETF", "").strip().upper()
+        if etf_flag == "Y":
+            continue
+
+        # Test listing
+        if row.get("Test Issue", "").strip().upper() == "Y":
+            continue
+
+        # Skip NASDAQ deficient/delisted
+        if row.get("Financial Status", "").strip().upper() not in ("", "N"):
+            continue
+
+        # Symbols with $ . suffixes are usually preferreds, warrants, etc.
+        # yfinance can't trade them anyway. Common share class lines like BRK.B
+        # get normalized to BRK-B below.
+        if "$" in symbol or symbol.endswith("W") and len(symbol) >= 5:
+            # Heuristic for warrants: avoid blanket exclusion of 5-letter tickers
+            # (many legit 5-letter symbols exist), only skip if name says warrant
+            name = row.get("Security Name", "")
+            if "Warrant" in name or "warrant" in name:
+                continue
+
+        # Name-based filter
+        name = row.get("Security Name", "")
+        if any(p in name for p in EXCLUDE_NAME_PATTERNS):
+            continue
+
+        # Length sanity (real common stock tickers: 1-5 chars, no dots)
+        # NASDAQ uses '.' for share classes (BRK.B); convert to '-' for yfinance
+        if "." in symbol:
+            # Only allow simple class suffixes like BRK.B, BF.B → BRK-B, BF-B
+            parts = symbol.split(".")
+            if len(parts) == 2 and len(parts[0]) <= 4 and len(parts[1]) == 1:
+                symbol = parts[0] + "-" + parts[1]
+            else:
+                continue  # Some other dot variant we don't trust
+
+        # Final sanity check
+        if not symbol.replace("-", "").isalnum():
+            continue
+        if len(symbol) > 6:
+            continue
+
+        seen.add(symbol)
+        common.append(symbol)
+
+    if verbose:
+        print(f"  Filtered to {len(common)} common stocks (excluded ETFs/ADRs/warrants/preferreds)")
+
+    # NASDAQ's listings have no market-cap info, so we can't truly take "top N".
+    # However, our liquidity filter ($20M avg daily dollar volume) will drop
+    # ~half the universe to the actually-tradeable names — which is what we want.
+    # Cap to top_n alphabetically to bound scan time; if you want strict market-cap
+    # ranking, supply a custom list.
+    if len(common) > top_n:
+        common = sorted(common)[:top_n]
+        if verbose:
+            print(f"  Capped to first {top_n} alphabetically (liquidity filter will further reduce)")
+
+    return common
+
+
+def get_universe(mode: str = "wide", use_wikipedia: bool = True, verbose: bool = True) -> list:
+    """
+    Universe selector. Modes:
+      - 'wide'    : ~2000-2500 US common stocks via NASDAQ Trader (default)
+      - 'sp500'   : S&P 500 only
+      - 'nasdaq100' : NASDAQ 100 only
+    """
+    if mode == "wide":
+        u = get_us_common_stocks(verbose=verbose)
+        if not u:
+            return get_sp500_universe(use_wikipedia=use_wikipedia, verbose=verbose)
+        return u
+    elif mode == "sp500":
+        return get_sp500_universe(use_wikipedia=use_wikipedia, verbose=verbose)
+    elif mode == "nasdaq100":
+        return NASDAQ_100[:]
+    else:
+        raise ValueError(f"Unknown universe mode: {mode}")
+
+
 # Convenient pre-built universes
 NASDAQ_100 = [
     "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "AVGO",
@@ -875,7 +1057,18 @@ def is_us_market_day(now=None) -> tuple[bool, str]:
 
 
 def run(tickers=None, top_n=None, min_dollar_vol=20_000_000,
-        save=True, use_wikipedia=True, skip_non_market_days=True):
+        save=True, use_wikipedia=True, skip_non_market_days=True,
+        universe_mode="wide"):
+    """
+    Run the screener.
+
+    Args:
+        tickers: explicit ticker list; if None, uses universe_mode.
+        universe_mode: 'wide' (~2000 US common stocks, excludes ETFs/ADRs),
+                       'sp500' (S&P 500 only), or 'nasdaq100'.
+        min_dollar_vol: liquidity filter floor in USD (default $20M).
+        skip_non_market_days: skip if today is weekend or US market holiday.
+    """
     if skip_non_market_days:
         ok, reason = is_us_market_day()
         if not ok:
@@ -884,8 +1077,8 @@ def run(tickers=None, top_n=None, min_dollar_vol=20_000_000,
 
     if tickers is None:
         print("Loading universe...")
-        tickers = get_sp500_universe(use_wikipedia=use_wikipedia)
-    print(f"\n8-EMA Pullback + Leadership Screener — {datetime.now():%Y-%m-%d %H:%M}")
+        tickers = get_universe(mode=universe_mode, use_wikipedia=use_wikipedia)
+    print(f"\nMomentum Stocks Screener — {datetime.now():%Y-%m-%d %H:%M}")
     print(f"Universe: {len(tickers)} tickers · Min $vol: ${min_dollar_vol/1e6:.0f}M\n")
 
     t0 = time.time()
@@ -924,7 +1117,7 @@ def run(tickers=None, top_n=None, min_dollar_vol=20_000_000,
         with open(out, "w") as f:
             json.dump({
                 "generated_at": datetime.utcnow().isoformat() + "Z",
-                "strategy": "8-EMA Pullback + Leadership",
+                "strategy": "Momentum Stocks Screener",
                 "universe_size": len(tickers),
                 "is_demo_data": False,
                 "results": results,

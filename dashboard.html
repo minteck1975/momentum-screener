@@ -342,12 +342,78 @@
     padding: 0;
     border-bottom: 1px solid var(--border-2);
   }
-  .detail-inner {
-    padding: 20px 24px;
+  /* New chart-centric detail layout: 2/3 chart, 1/3 trade plan + signals */
+  .detail-chart-layout {
+    padding: 18px 22px;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 24px;
+    grid-template-columns: 2fr 1fr;
+    gap: 20px;
   }
+  /* Chart panel */
+  .chart-panel {
+    background: var(--bg-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+  }
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-3);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .chart-title {
+    color: var(--text);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .chart-tv-link {
+    color: var(--text-3);
+    text-decoration: none;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: color 0.15s;
+  }
+  .chart-tv-link:hover { color: var(--blue); }
+
+  .tradingview-widget-container {
+    flex: 1;
+    min-height: 420px;
+    background: var(--bg-2);
+  }
+  .tradingview-widget-container__widget {
+    height: 100%;
+    width: 100%;
+  }
+  .chart-levels-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 10px 14px;
+    background: var(--bg-3);
+    border-top: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .lvl-tag { color: var(--text-2); }
+  .lvl-tag.lvl-entry { color: var(--blue); }
+  .lvl-tag.lvl-stop  { color: var(--red); }
+  .lvl-tag.lvl-target { color: var(--green); }
+  .lvl-tag.lvl-target2 { color: var(--green); opacity: 0.7; }
+
+  .side-panel {
+    overflow: auto;
+    max-height: 700px;
+  }
+
   .detail-section h3 {
     font-family: var(--mono);
     font-size: 10px;
@@ -462,7 +528,9 @@
   }
   @media (max-width: 1200px) {
     .strip { grid-template-columns: repeat(3, 1fr); }
-    .detail-inner { grid-template-columns: 1fr; }
+    .detail-chart-layout { grid-template-columns: 1fr; }
+    .chart-panel { min-height: 420px; }
+    .side-panel { max-height: none; }
     .col-signal, .col-entry, .col-stop { display: none; }
   }
 </style>
@@ -519,8 +587,8 @@
 
 <div class="filters">
   <div class="filter-group">
-    <button class="filter-btn active" data-tier="ACTIONABLE">Actionable</button>
-    <button class="filter-btn" data-tier="A_SETUP">A</button>
+    <button class="filter-btn" data-tier="ACTIONABLE">Actionable</button>
+    <button class="filter-btn active" data-tier="A_SETUP">A only</button>
     <button class="filter-btn" data-tier="B_SETUP">B</button>
     <button class="filter-btn" data-tier="WATCH">Watch</button>
     <button class="filter-btn" data-tier="ALL">All</button>
@@ -580,7 +648,7 @@
 
 <script>
   let allResults = [];
-  let filters = { tier: 'ACTIONABLE', signal: 'ANY', ema: 'ANY', sector: 'ALL', leaders: 'ANY', search: '' };
+  let filters = { tier: 'A_SETUP', signal: 'ANY', ema: 'ANY', sector: 'ALL', leaders: 'ANY', search: '' };
   let sort = { key: 'score', dir: 'desc' };
   let expandedTickers = new Set();
   let acctSize = 50000;
@@ -753,6 +821,59 @@
         renderTable();
       });
     });
+
+    // Initialize TradingView charts for any currently-expanded rows
+    initTradingViewCharts();
+  }
+
+  // ============================================================================
+  // TradingView Advanced Chart widget injection
+  // The free widget reads its config from the parent container's <script type="application/json">
+  // We inject a fresh <script src="...embed-widget-advanced-chart.js"> for each expanded row.
+  // ============================================================================
+  function initTradingViewCharts() {
+    expandedTickers.forEach(ticker => {
+      const r = allResults.find(x => x.ticker === ticker);
+      if (!r) return;
+      const chartId = `tv-chart-${ticker.replace(/[^a-zA-Z0-9]/g, '_')}`;
+      const container = document.getElementById(chartId);
+      if (!container) return;
+
+      // Don't re-init if already rendered (widget injects an <iframe>)
+      if (container.querySelector('iframe')) return;
+
+      // Clean any prior children, keep the inner placeholder div
+      container.innerHTML = '<div class="tradingview-widget-container__widget"></div>';
+
+      const cfg = {
+        autosize: true,
+        symbol: ticker,                    // TV auto-resolves the exchange prefix
+        interval: "D",                      // daily candles
+        timezone: "America/New_York",
+        theme: "dark",
+        style: "1",                          // candlesticks
+        locale: "en",
+        backgroundColor: "rgba(17, 22, 30, 1)",
+        gridColor: "rgba(42, 52, 69, 0.6)",
+        hide_side_toolbar: true,
+        allow_symbol_change: false,
+        save_image: false,
+        studies: [
+          // 20-period EMA on close — matches our screener's 20-EMA
+          { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
+          // 50-period EMA on close — matches our screener's 50-EMA
+          { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }
+        ],
+        support_host: "https://www.tradingview.com"
+      };
+
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+      script.async = true;
+      script.innerHTML = JSON.stringify(cfg);
+      container.appendChild(script);
+    });
   }
 
   function renderDetail(r) {
@@ -764,54 +885,71 @@
     const sizing = calcSize(r.entry, r.stop);
     const quarterShares = Math.floor(sizing.shares / 4);
 
+    // Determine the TradingView symbol — most US stocks resolve fine with just the ticker,
+    // but some exchanges need a prefix. TradingView's auto-resolution handles most cases.
+    const tvSymbol = r.ticker;
+    // Unique container ID per ticker so multiple expanded rows don't collide
+    const chartId = `tv-chart-${r.ticker.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
     return `
       <tr class="detail-row">
         <td colspan="14">
-          <div class="detail-inner">
-            <div class="detail-section">
-              <h3>Signal breakdown</h3>
-              <ul class="reasons">${reasons || '<li>no signals</li>'}</ul>
-            </div>
-            <div class="detail-section">
-              <h3>Setup stats</h3>
-              <div class="tf-grid">
-                <span class="k">Price / 8 / 20 / 50 EMA</span><span class="v">${fmtMoney(r.price)} / ${fmtMoney(r.ema8)} / ${fmtMoney(r.ema20)} / ${fmtMoney(r.ema50)}</span>
-                <span class="k">Stacked EMAs</span><span class="v">${fmtBool(r.stacked_emas)}</span>
-                <span class="k">50-EMA slope (10d)</span><span class="v">${r.ema50_slope_pct !== null ? (r.ema50_slope_pct > 0 ? '+' : '') + fmtNum(r.ema50_slope_pct, 2) + '%' : '—'}</span>
-                <span class="k">HH / HL</span><span class="v">${fmtBool(r.higher_highs)} / ${fmtBool(r.higher_lows)}</span>
-                <span class="k">Weekly above 20-EMA</span><span class="v">${fmtBool(r.weekly_above_ema20)}</span>
-                <span class="k">Pullback bars / depth</span><span class="v">${r.bars_since_peak ?? '—'} / ${r.pullback_pct ? fmtNum(r.pullback_pct, 1) + '%' : '—'}</span>
-                <span class="k">Vol vs impulse</span><span class="v">${r.vol_decline_ratio ? fmtNum(r.vol_decline_ratio, 2) + 'x' : '—'}</span>
-                <span class="k">Reversal candle</span><span class="v">${r.signal_pattern || '—'}${r.signal_bars_ago !== null && r.signal_bars_ago !== undefined ? ' (' + (r.signal_bars_ago === 0 ? 'today' : 'yesterday') + ')' : ''}</span>
-                <span class="k">ATR(14)</span><span class="v">${fmtMoney(r.atr)}</span>
-                <span class="k">Avg \$ vol (20d)</span><span class="v">$${(r.dollar_vol_20d / 1e6).toFixed(1)}M</span>
+          <div class="detail-chart-layout">
+
+            <div class="chart-panel">
+              <div class="chart-header">
+                <span class="chart-title">${r.ticker} · Daily · 20-EMA + 50-EMA</span>
+                <a class="chart-tv-link" href="https://www.tradingview.com/chart/?symbol=${tvSymbol}" target="_blank" rel="noopener">open in TradingView ↗</a>
               </div>
-              <h3 style="margin-top:14px;">Market leadership · vs SPY</h3>
-              <div class="tf-grid">
-                <span class="k">RS 1M / 3M / 6M / 12M</span><span class="v">${fmtRS(r.rs_1m)} / <b style="color:var(--text)">${fmtRS(r.rs_3m)}</b> / ${fmtRS(r.rs_6m)} / ${fmtRS(r.rs_12m)}</span>
-                <span class="k">52w high / off</span><span class="v">${fmtMoney(r.high_52w)} / <b style="color:var(--text)">${r.pct_off_52w_high !== null && r.pct_off_52w_high !== undefined ? fmtNum(r.pct_off_52w_high, 1) + '%' : '—'}</b></span>
-                <span class="k">ADR (20d)</span><span class="v">${r.adr_pct_20d !== null && r.adr_pct_20d !== undefined ? fmtNum(r.adr_pct_20d, 2) + '%' : '—'}</span>
-                <span class="k">Stock return 3M / 6M</span><span class="v">${r.stock_return_3m !== null && r.stock_return_3m !== undefined ? (r.stock_return_3m > 0 ? '+' : '') + fmtNum(r.stock_return_3m, 1) + '%' : '—'} / ${r.stock_return_6m !== null && r.stock_return_6m !== undefined ? (r.stock_return_6m > 0 ? '+' : '') + fmtNum(r.stock_return_6m, 1) + '%' : '—'}</span>
+              <div class="tradingview-widget-container" id="${chartId}">
+                <div class="tradingview-widget-container__widget"></div>
+              </div>
+              <div class="chart-levels-legend">
+                <span class="lvl-tag lvl-entry">▬ Entry  ${fmtMoney(r.entry)}</span>
+                <span class="lvl-tag lvl-stop">▬ Stop  ${fmtMoney(r.stop)}</span>
+                <span class="lvl-tag lvl-target">▬ T1  ${fmtMoney(r.target1_swing_high)}</span>
+                <span class="lvl-tag lvl-target2">▬ T2  ${fmtMoney(r.target2_2R)}</span>
               </div>
             </div>
-            <div class="detail-section">
-              <h3>Trade plan · scale-out</h3>
-              <div class="trade-card">
-                <div class="trade-row"><span class="k">Entry</span><span class="v entry">${fmtMoney(r.entry)}</span></div>
-                <div class="trade-row"><span class="k">Stop (swing low)</span><span class="v stop">${fmtMoney(r.stop)}</span></div>
-                <div class="trade-row"><span class="k">Risk / share</span><span class="v">${fmtMoney(r.risk_per_share)}</span></div>
-                <div class="trade-row"><span class="k">T1 · prior swing high</span><span class="v target">${fmtMoney(r.target1_swing_high)} <span style="color:var(--text-3); font-weight:400">(${fmtNum(r.rr1, 1)}R)</span></span></div>
-                <div class="trade-row"><span class="k">T2 · 2R</span><span class="v target">${fmtMoney(r.target2_2R)}</span></div>
+
+            <div class="side-panel">
+
+              <div class="detail-section">
+                <h3>Trade plan</h3>
+                <div class="trade-card">
+                  <div class="trade-row"><span class="k">Entry</span><span class="v entry">${fmtMoney(r.entry)}</span></div>
+                  <div class="trade-row"><span class="k">Stop (swing low)</span><span class="v stop">${fmtMoney(r.stop)}</span></div>
+                  <div class="trade-row"><span class="k">Risk / share</span><span class="v">${fmtMoney(r.risk_per_share)}</span></div>
+                  <div class="trade-row"><span class="k">T1 · prior swing high</span><span class="v target">${fmtMoney(r.target1_swing_high)} <span style="color:var(--text-3); font-weight:400">(${fmtNum(r.rr1, 1)}R)</span></span></div>
+                  <div class="trade-row"><span class="k">T2 · 2R</span><span class="v target">${fmtMoney(r.target2_2R)}</span></div>
+                </div>
+                <div class="trade-card" style="margin-top:10px;">
+                  <div class="trade-row"><span class="k">Position (${riskPct}% of $${acctSize.toLocaleString()})</span><span class="v sized">${sizing.shares.toLocaleString()} sh</span></div>
+                  <div class="trade-row"><span class="k">Capital deployed</span><span class="v">$${sizing.positionValue.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                  <div class="trade-row"><span class="k">$ at risk</span><span class="v stop">$${sizing.riskDollars.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+                </div>
+                <div class="scale-note">
+                  Scale-out: sell ¼ (${quarterShares.toLocaleString()} sh) at T1, ¼ at T2, trail rest below 8-EMA.
+                </div>
               </div>
-              <div class="trade-card" style="margin-top:10px;">
-                <div class="trade-row"><span class="k">Position (${riskPct}% of $${acctSize.toLocaleString()})</span><span class="v sized">${sizing.shares.toLocaleString()} sh</span></div>
-                <div class="trade-row"><span class="k">Capital deployed</span><span class="v">$${sizing.positionValue.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
-                <div class="trade-row"><span class="k">$ at risk</span><span class="v stop">$${sizing.riskDollars.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
+
+              <div class="detail-section" style="margin-top:18px;">
+                <h3>Signal breakdown</h3>
+                <ul class="reasons">${reasons || '<li>no signals</li>'}</ul>
               </div>
-              <div class="scale-note">
-                Scale-out plan: sell ¼ (${quarterShares.toLocaleString()} sh) at T1, ¼ at T2, trail rest below 8-EMA.
+
+              <div class="detail-section" style="margin-top:18px;">
+                <h3>Leadership · vs SPY</h3>
+                <div class="tf-grid">
+                  <span class="k">RS 3M / 6M</span><span class="v"><b style="color:var(--text)">${fmtRS(r.rs_3m)}</b> / ${fmtRS(r.rs_6m)}</span>
+                  <span class="k">RS 12M</span><span class="v">${fmtRS(r.rs_12m)}</span>
+                  <span class="k">Off 52w high</span><span class="v">${r.pct_off_52w_high !== null && r.pct_off_52w_high !== undefined ? fmtNum(r.pct_off_52w_high, 1) + '%' : '—'}</span>
+                  <span class="k">ADR (20d)</span><span class="v">${r.adr_pct_20d !== null && r.adr_pct_20d !== undefined ? fmtNum(r.adr_pct_20d, 2) + '%' : '—'}</span>
+                </div>
               </div>
+
             </div>
+
           </div>
         </td>
       </tr>

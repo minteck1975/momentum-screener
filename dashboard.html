@@ -833,25 +833,16 @@
         allow_symbol_change: false,
         save_image: false,
         studies: [
-          {
-            // 20-period EMA on close — fast (yellow/amber)
-            id: "MAExp@tv-basicstudies",
-            inputs: { length: 20 },
-            styles: {
-              plot: { color: "#F5B942", linewidth: 2 }
-            }
-          },
-          {
-            // 50-period EMA on close — slow (blue)
-            id: "MAExp@tv-basicstudies",
-            inputs: { length: 50 },
-            styles: {
-              plot: { color: "#5B9DF9", linewidth: 2 }
-            }
-          }
+          // 20-period EMA on close
+          { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
+          // 50-period EMA on close
+          { id: "MAExp@tv-basicstudies", inputs: { length: 50 } }
         ],
-        // Fallback: in case per-study styles aren't honored by the free widget,
-        // these top-level overrides at least make both EMAs thicker and clearly visible.
+        // Make both EMAs thicker. The free embed widget can't give two
+        // instances of the same study different colors — that requires the
+        // paid Charting Library. So both render in TradingView's default EMA
+        // color (yellow), and we tell them apart by which line is steeper
+        // (the 20-EMA reacts faster to price than the 50-EMA).
         studies_overrides: {
           "moving average exponential.plot.linewidth": 2,
           "moving average exponential.plot.color": "#F5B942"
@@ -889,8 +880,8 @@
               <div class="chart-header">
                 <span class="chart-title">
                   ${r.ticker} · Daily ·
-                  <span style="color:#F5B942">●</span> 20-EMA
-                  <span style="color:#5B9DF9; margin-left:8px">●</span> 50-EMA
+                  <span style="color:#F5B942">━━</span> 20-EMA &amp; 50-EMA
+                  <span style="color:var(--text-3); font-size:10px; margin-left:6px">(20 reacts faster · 50 is smoother)</span>
                 </span>
                 <a class="chart-tv-link" href="https://www.tradingview.com/chart/?symbol=${tvSymbol}" target="_blank" rel="noopener">open in TradingView ↗</a>
               </div>

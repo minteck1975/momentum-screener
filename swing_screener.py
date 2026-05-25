@@ -835,7 +835,7 @@ def get_sp500_universe(use_wikipedia: bool = True, verbose: bool = True) -> list
 #   6. The liquidity filter inside analyze_ticker() further cuts to ~2000 names
 #      by requiring $20M+ daily dollar volume.
 
-def get_us_common_stocks(verbose: bool = True, top_n: int = 2500) -> list:
+def get_us_common_stocks(verbose: bool = True, top_n: int = 2000) -> list:
     """
     Fetch ~2000-2500 US common stocks via NASDAQ Trader's daily listings.
 

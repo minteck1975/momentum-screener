@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>8-EMA PULLBACK + LEADERSHIP SCREENER</title>
+<title>Momentum Stocks Screener</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
@@ -503,26 +503,6 @@
     letter-spacing: 0.05em;
   }
 
-  .file-loader {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .file-loader label {
-    background: var(--bg-3);
-    border: 1px solid var(--border-2);
-    color: var(--text-2);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 8px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .file-loader label:hover { color: var(--text); background: var(--border); }
-  .file-loader input[type=file] { display: none; }
-
   @media (max-width: 1500px) {
     .col-rs6m, .col-adr, .col-pb { display: none; }
   }
@@ -539,7 +519,7 @@
 
 <div class="header">
   <div class="brand">
-    <h1>8<span class="accent">·</span>EMA PULLBACK <span class="accent">+</span> LEADERSHIP</h1>
+    <h1>MOMENTUM<span class="accent"> · </span>STOCKS<span class="accent"> · </span>SCREENER</h1>
     <div class="sub">trend · market leaders · pullback to 8-EMA · trigger candle</div>
   </div>
   <div class="header-meta">
@@ -554,10 +534,6 @@
     <div>
       <div class="label">Generated</div>
       <div class="val" id="meta-generated">—</div>
-    </div>
-    <div class="file-loader">
-      <label for="file-input">Load results.json</label>
-      <input id="file-input" type="file" accept="application/json" />
     </div>
   </div>
 </div>
@@ -611,12 +587,6 @@
   <select id="sector-select" class="search" style="flex:0 0 130px; min-width:0; cursor:pointer;">
     <option value="ALL">All sectors</option>
   </select>
-  <div class="calc">
-    <label>Acct $</label>
-    <input id="acct-size" type="number" value="50000" step="1000" />
-    <label>Risk %</label>
-    <input id="risk-pct" type="number" value="1" step="0.25" min="0.25" max="2" />
-  </div>
   <input class="search" id="search" placeholder="search ticker / name / sector..." />
 </div>
 
@@ -651,8 +621,6 @@
   let filters = { tier: 'A_SETUP', signal: 'ANY', ema: 'ANY', sector: 'ALL', leaders: 'ANY', search: '' };
   let sort = { key: 'score', dir: 'desc' };
   let expandedTickers = new Set();
-  let acctSize = 50000;
-  let riskPct = 1;
 
   function fmtNum(v, dp = 2) {
     if (v === null || v === undefined || Number.isNaN(v)) return '—';
@@ -755,19 +723,6 @@
       if (va > vb) return sign;
       return 0;
     });
-  }
-
-  function calcSize(entry, stop) {
-    const riskDollars = acctSize * (riskPct / 100);
-    const riskPerShare = entry - stop;
-    if (riskPerShare <= 0) return { shares: 0, positionValue: 0, riskDollars };
-    const shares = Math.floor(riskDollars / riskPerShare);
-    return {
-      shares,
-      positionValue: shares * entry,
-      riskDollars: shares * riskPerShare,
-      riskPerShare,
-    };
   }
 
   function renderTable() {
@@ -882,9 +837,6 @@
       return `<li class="${isWarn ? 'warn' : ''}">${text}</li>`;
     }).join('');
 
-    const sizing = calcSize(r.entry, r.stop);
-    const quarterShares = Math.floor(sizing.shares / 4);
-
     // Determine the TradingView symbol — most US stocks resolve fine with just the ticker,
     // but some exchanges need a prefix. TradingView's auto-resolution handles most cases.
     const tvSymbol = r.ticker;
@@ -923,13 +875,8 @@
                   <div class="trade-row"><span class="k">T1 · prior swing high</span><span class="v target">${fmtMoney(r.target1_swing_high)} <span style="color:var(--text-3); font-weight:400">(${fmtNum(r.rr1, 1)}R)</span></span></div>
                   <div class="trade-row"><span class="k">T2 · 2R</span><span class="v target">${fmtMoney(r.target2_2R)}</span></div>
                 </div>
-                <div class="trade-card" style="margin-top:10px;">
-                  <div class="trade-row"><span class="k">Position (${riskPct}% of $${acctSize.toLocaleString()})</span><span class="v sized">${sizing.shares.toLocaleString()} sh</span></div>
-                  <div class="trade-row"><span class="k">Capital deployed</span><span class="v">$${sizing.positionValue.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
-                  <div class="trade-row"><span class="k">$ at risk</span><span class="v stop">$${sizing.riskDollars.toLocaleString(undefined,{maximumFractionDigits:0})}</span></div>
-                </div>
                 <div class="scale-note">
-                  Scale-out: sell ¼ (${quarterShares.toLocaleString()} sh) at T1, ¼ at T2, trail rest below 8-EMA.
+                  Scale-out: sell ¼ at T1, ¼ at T2, trail rest below 8-EMA.
                 </div>
               </div>
 
@@ -1014,14 +961,6 @@
     filters.search = e.target.value;
     renderTable();
   });
-  document.getElementById('acct-size').addEventListener('input', e => {
-    acctSize = parseFloat(e.target.value) || 0;
-    renderTable();
-  });
-  document.getElementById('risk-pct').addEventListener('input', e => {
-    riskPct = parseFloat(e.target.value) || 1;
-    renderTable();
-  });
 
   document.querySelectorAll('th.sortable').forEach(th => {
     th.addEventListener('click', () => {
@@ -1032,21 +971,6 @@
       th.classList.add(sort.dir === 'asc' ? 'sort-asc' : 'sort-desc');
       renderTable();
     });
-  });
-
-  document.getElementById('file-input').addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        loadData(data);
-      } catch (err) {
-        alert('Invalid JSON: ' + err.message);
-      }
-    };
-    reader.readAsText(f);
   });
 
   function loadData(data) {

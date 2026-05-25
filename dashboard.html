@@ -661,15 +661,15 @@
   // Close-in-range: where did the trigger candle close in its day's range
   function cirClass(v) {
     if (v === null || v === undefined) return '';
-    if (v >= 0.7) return 'num up';     // strong close
-    if (v >= 0.4) return '';           // neutral
+    if (v >= 0.6) return 'num up';     // good close
+    if (v >= 0.3) return '';           // neutral
     return 'num down';                 // weak — pattern with no follow-through
   }
   // Risk-vs-daily-ADR: how extended is the setup
   function riskClass(v) {
     if (v === null || v === undefined) return '';
-    if (v <= 0.8) return 'num up';     // tight
-    if (v <= 1.2) return '';           // OK
+    if (v <= 1.0) return 'num up';     // tight
+    if (v <= 2.0) return '';           // OK
     return 'num down';                 // extended
   }
   function pullbackClass(v) {
@@ -935,8 +935,8 @@
               <div class="detail-section" style="margin-top:18px;">
                 <h3>Setup quality</h3>
                 <div class="tf-grid">
-                  <span class="k">Close-in-range</span><span class="v ${cirClass(r.close_in_range)}"><b>${r.close_in_range !== null && r.close_in_range !== undefined ? fmtNum(r.close_in_range * 100, 0) + '%' : '—'}</b> <span style="color:var(--text-3); font-size:10px">${r.close_in_range !== null && r.close_in_range !== undefined ? (r.close_in_range >= 0.7 ? '· strong close' : r.close_in_range < 0.4 ? '· weak — no follow-through' : '· neutral') : ''}</span></span>
-                  <span class="k">Risk vs daily ADR</span><span class="v ${riskClass(r.risk_vs_adr)}"><b>${r.risk_vs_adr !== null && r.risk_vs_adr !== undefined ? fmtNum(r.risk_vs_adr, 2) + 'x' : '—'}</b> <span style="color:var(--text-3); font-size:10px">${r.risk_vs_adr !== null && r.risk_vs_adr !== undefined ? (r.risk_vs_adr <= 0.8 ? '· tight' : r.risk_vs_adr <= 1.2 ? '· OK' : '· extended') : ''}</span></span>
+                  <span class="k">Close-in-range</span><span class="v ${cirClass(r.close_in_range)}"><b>${r.close_in_range !== null && r.close_in_range !== undefined ? fmtNum(r.close_in_range * 100, 0) + '%' : '—'}</b> <span style="color:var(--text-3); font-size:10px">${r.close_in_range !== null && r.close_in_range !== undefined ? (r.close_in_range >= 0.6 ? '· strong close' : r.close_in_range < 0.3 ? '· weak — no follow-through' : '· neutral') : ''}</span></span>
+                  <span class="k">Risk vs daily ADR</span><span class="v ${riskClass(r.risk_vs_adr)}"><b>${r.risk_vs_adr !== null && r.risk_vs_adr !== undefined ? fmtNum(r.risk_vs_adr, 2) + 'x' : '—'}</b> <span style="color:var(--text-3); font-size:10px">${r.risk_vs_adr !== null && r.risk_vs_adr !== undefined ? (r.risk_vs_adr <= 1.0 ? '· tight' : r.risk_vs_adr <= 2.0 ? '· OK' : '· extended') : ''}</span></span>
                 </div>
               </div>
 

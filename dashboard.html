@@ -1,8 +1,15 @@
 <!DOCTYPE html>
+<!-- DEPLOY_TIMESTAMP: __DEPLOY_TIMESTAMP__ -->
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- Defeat aggressive browser caching of the dashboard HTML.
+     GitHub Pages doesn't let us set HTTP cache headers directly, so we use meta tags.
+     results.json is separately cache-busted via ?t=Date.now() in the fetch call. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>Momentum Stocks Screener</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij4KICA8cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxMyIgZmlsbD0iIzBhMGUxNCIvPgogIDxyZWN0IHg9IjEiIHk9IjEiIHdpZHRoPSI2MiIgaGVpZ2h0PSI2MiIgcng9IjEyIiBmaWxsPSJub25lIiBzdHJva2U9IiMxZjI5MzciIHN0cm9rZS13aWR0aD0iMC41Ii8+CiAgPHBvbHlsaW5lIHBvaW50cz0iOCw0OCAxOCwzMCAyNiwzOCAzOCwxOCA0NiwyOCA1NiwxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBkNGE0IiBzdHJva2Utd2lkdGg9IjIuNSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPGNpcmNsZSBjeD0iOCIgIGN5PSI0OCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+CiAgPGNpcmNsZSBjeD0iMTgiIGN5PSIzMCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+CiAgPGNpcmNsZSBjeD0iMjYiIGN5PSIzOCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+CiAgPGNpcmNsZSBjeD0iMzgiIGN5PSIxOCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+CiAgPGNpcmNsZSBjeD0iNDYiIGN5PSIyOCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+CiAgPGNpcmNsZSBjeD0iNTYiIGN5PSIxMCIgcj0iMi41IiBmaWxsPSIjMDBkNGE0Ii8+Cjwvc3ZnPgo=" />
 <link rel="preconnect" href="https://fonts.googleapis.com">

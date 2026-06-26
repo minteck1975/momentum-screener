@@ -145,6 +145,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+          fetch-depth: 0    # full history so we can fast-forward to the scan-job's commit
+
+      - name: Fast-forward to latest main (catch the scan-job's commit)
+        run: |
+          # The scan job in this same workflow pushes results.json to main.
+          # actions/checkout sees the SHA at workflow-start, not the post-push tip,
+          # so we explicitly pull to ensure we have the fresh results.json.
+          git fetch origin main
+          git reset --hard origin/main
+          echo "Now at:"
+          git log -1 --oneline
+          echo "results.json mtime:"
+          ls -la results.json
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -153,10 +166,21 @@ jobs:
         run: |
           # Build a clean site folder with just what Pages needs
           mkdir -p _site
-          cp dashboard.html _site/index.html      # serve dashboard as the homepage
-          cp dashboard.html _site/dashboard.html  # also keep original path
+
+          # Stamp the deploy timestamp into the HTML so you can verify at a glance
+          # whether the page you're viewing is freshly deployed (vs. stuck on an
+          # older cached version)
+          DEPLOY_TS=$(date -u +'%Y-%m-%d %H:%M:%SZ')
+          sed "s|__DEPLOY_TIMESTAMP__|${DEPLOY_TS}|g" dashboard.html > _site/index.html
+          cp _site/index.html _site/dashboard.html   # also keep original path
           cp results.json _site/
-          cp icon.svg _site/                       # favicon
+          # Copy icon.svg only if it exists (favicon is also inlined as data URI in the HTML)
+          [ -f icon.svg ] && cp icon.svg _site/ || true
+          echo "Deploy timestamp: ${DEPLOY_TS}"
+          echo "Staged site contents:"
+          ls -la _site/
+          echo "results.json first generated_at field:"
+          grep -m1 'generated_at' _site/results.json || echo "(no generated_at found)"
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
